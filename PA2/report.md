@@ -4,13 +4,22 @@
 
 ### 实现方法
 
+使用分块的思路，将数据读入共享内存，减少与全局内存的读写。将一个小的子矩阵块分配给一个线程块，每个线程执行自己位置的元素计算。i、j为子矩阵位置的元素， `i=threadIdx.x, j=threadIdx.y `，每个线程的伪代码如下：
+
+```c
+for (int k = 0; k < 32; k++)
+    D[i][j] = min(D[i][j], D[i][k] + D[k][j]);
+```
+
+在实验指导的基础上，实现两级分块。小块即实验指导中的子矩阵块，有$32 \times 32$个元素。大块由若干个小块组成。每个线程块包含$32 \times 32$个线程，加载一整个大块，置于共享内存中。线程执行每个小块对应自己位置的元素的计算。
+
 按照文档的方法，算法分为3个阶段：
 
-- step 1: 使用1个线程块，每个线程块包含$32 \times 32$个线程。
+- step 1: 使用1个线程块，线程块包含$32 \times 32$个线程，没有两级分块。
 
-- step 2: 使用$\lceil \frac{n}{6 \times 32} \rceil \times 2$个线程块，每个线程块包含$32 \times 32$个线程。
+- step 2: 使用$\lceil \frac{n}{6 \times 32} \rceil \times 2$个线程块，线程块包含$32 \times 32$个线程，每个大块由$32 \times 32$个小块组成。`batch_size`越大，每个线程执行的计算量越多，但线程块数量越少。`batch_size = 6`是折中后的结果。
 
-- step 3: 使用$\lceil \frac{n}{6 \times 32} \rceil \times \lceil \frac{n}{6 \times 32} \rceil$个线程块，每个线程块包含$32 \times 32$个线程。
+- step 3: 使用$\lceil \frac{n}{6 \times 32} \rceil \times \lceil \frac{n}{6 \times 32} \rceil$个线程块，线程块包含$32 \times 32$个线程。每个大块由$6 \times 6$个小块组成。这一阶段的线程块数量很大，优化目标是减小线程块数量，因此使用更大的`bantch_size`。使用`batch_size = 6`是因为$6 \times 6$的大块对应$6 \times 1$的水平块和$6 \times 1$的竖直块。使用共享内存为$12 \times 32 \times 32 \times 4B = 48KB$，刚好占满$48KB$的共享内存。
 
 ### 加速比
 
