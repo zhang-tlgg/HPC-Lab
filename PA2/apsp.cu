@@ -1,6 +1,7 @@
 /*
 两级分块
-n = 10000, Time: 776.595452 ms
+n = 1000,  Time: 1.716608 ms
+n = 10000, Time: 660.978576 ms
 */
 
 #include "apsp.h"
@@ -14,10 +15,20 @@ __device__ int get_block_elem(int n, int *graph, int block_i, int block_j) {
 	return (i < n && j < n) ? graph[i * n + j] : max_dist;
 }
 
+__device__ int get_block_elem_in(int n, int *graph, int block_i, int block_j) {
+	int i = block_i + threadIdx.y, j = block_j + threadIdx.x;
+	return graph[i * n + j];
+}
+
 __device__ void write_block_elem(int n, int *graph, int block_i, int block_j, int ele) {
 	int i = block_i + threadIdx.y, j = block_j + threadIdx.x;
 	if (i < n && j < n)
 		graph[i * n + j] = ele;
+}
+
+__device__ void write_block_elem_in(int n, int *graph, int block_i, int block_j, int ele) {
+	int i = block_i + threadIdx.y, j = block_j + threadIdx.x;
+	graph[i * n + j] = ele;
 }
 
 __global__ void first_step(int n, int *graph, int r) {
@@ -76,12 +87,24 @@ __global__ void third_step(int n, int *graph, int r) {
 	for (int k = 0, i = block_i; k < batch_size_2; k++, i += 32)
 		v_block[k][threadIdx.y][threadIdx.x] = get_block_elem(n, graph, i, centre_j);
 	__syncthreads();
-	for (int p = 0, i = block_i; p < batch_size_2; p++, i += 32) {
-		for (int q = 0, j = block_j; q < batch_size_2; q++, j += 32) {
-			dist = get_block_elem(n, graph, i, j);
-			for (int k = 0; k < 32; k++)
-				dist = min(dist, v_block[p][threadIdx.y][k] + h_block[q][k][threadIdx.x]);
-			write_block_elem(n, graph, i, j, dist);
+	if (block_i + batch_size_2 * 32 <= n && block_j + batch_size_2 * 32 <= n) {
+		for (int p = 0, i = block_i; p < batch_size_2; p++, i += 32) {
+			for (int q = 0, j = block_j; q < batch_size_2; q++, j += 32) {
+				dist = get_block_elem_in(n, graph, i, j);
+				for (int k = 0; k < 32; k++)
+					dist = min(dist, v_block[p][threadIdx.y][k] + h_block[q][k][threadIdx.x]);
+				write_block_elem_in(n, graph, i, j, dist);
+			}
+		}
+	}
+	else {
+		for (int p = 0, i = block_i; p < batch_size_2; p++, i += 32) {
+			for (int q = 0, j = block_j; q < batch_size_2; q++, j += 32) {
+				dist = get_block_elem(n, graph, i, j);
+				for (int k = 0; k < 32; k++)
+					dist = min(dist, v_block[p][threadIdx.y][k] + h_block[q][k][threadIdx.x]);
+				write_block_elem(n, graph, i, j, dist);
+			}
 		}
 	}
 }
