@@ -7,15 +7,11 @@
 void pow_a(int *a, int *b, int n, int m) {
     // TODO: 使用 omp parallel for 并行这个循环
     #pragma omp parallel for
-    for (int tid = 0; tid < omp_get_num_threads(); ++tid){
-        int scale = n / omp_get_num_threads();
-        int start_i = omp_get_thread_num() * scale;
-        for (int i = start_i; i < start_i + scale; i++) {
-            int x = 1;
-            for (int j = 0; j < m; j++)
-                x *= a[i];
-            b[i] = x;
-        }
+    for (int i = 0; i < n; i++) {
+        int x = 1;
+        for (int j = 0; j < m; j++) 
+            x *= a[i];
+        b[i] = x;
     }
 }
 
